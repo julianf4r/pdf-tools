@@ -222,59 +222,6 @@ onUnmounted(() => {
     <FileUploader accept="image/*" :multiple="true" :label="t.imagesToPdf.uploadLabel"
       :description="t.imagesToPdf.uploadDescription" @files-selected="handleFilesSelected" />
 
-    <!-- Page size options -->
-    <div class="mt-4 bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-      <div class="flex flex-wrap items-center gap-4">
-        <div class="flex items-center gap-3">
-          <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t.imagesToPdf.sizeModeLabel }}</label>
-          <BaseSelect :model-value="sizeMode"
-            @update:model-value="(val) => sizeMode = val as 'original' | 'max' | 'custom'" :options="[
-              { label: t.imagesToPdf.sizeOriginal, value: 'original' },
-              { label: t.imagesToPdf.sizeMax, value: 'max' },
-              { label: t.imagesToPdf.sizeCustom, value: 'custom' }
-            ]" />
-        </div>
-
-        <template v-if="sizeMode === 'custom'">
-          <div class="flex flex-wrap items-center gap-6">
-            <div class="flex items-center gap-3">
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t.imagesToPdf.sizePresetLabel
-                }}</label>
-              <BaseSelect :model-value="preset" @update:model-value="handlePresetChange" :options="[
-                { label: t.imagesToPdf.presetNone || 'None', value: 'none' },
-                { label: 'A4', value: 'A4' },
-                { label: 'A3', value: 'A3' },
-                { label: 'Letter', value: 'Letter' }
-              ]" />
-            </div>
-
-            <div class="flex items-center gap-4 border-l border-gray-200 dark:border-gray-700 pl-4">
-              <div class="flex items-center gap-3">
-                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t.imagesToPdf.customWidthLabel
-                  }}</label>
-                <div class="relative">
-                  <input type="number" v-model.number="customWidthPx" min="1" step="1"
-                    class="w-24 pl-3 pr-6 py-2.5 rounded-lg border-0 ring-1 ring-inset ring-gray-300 dark:ring-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm transition-shadow dark:[color-scheme:dark]" />
-                  <span
-                    class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">px</span>
-                </div>
-              </div>
-              <div class="flex items-center gap-3">
-                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t.imagesToPdf.customHeightLabel
-                  }}</label>
-                <div class="relative">
-                  <input type="number" v-model.number="customHeightPx" min="1" step="1"
-                    class="w-24 pl-3 pr-6 py-2.5 rounded-lg border-0 ring-1 ring-inset ring-gray-300 dark:ring-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm transition-shadow dark:[color-scheme:dark]" />
-                  <span
-                    class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">px</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </template>
-      </div>
-    </div>
-
     <div v-if="images.length > 0" class="space-y-4">
       <div class="flex justify-between items-center">
         <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">{{ t.imagesToPdf.images }} ({{ images.length
@@ -283,6 +230,59 @@ onUnmounted(() => {
         <button @click="clearImages" class="text-sm text-red-500 hover:text-red-600 dark:text-red-400">
           {{ t.common.clearAll }}
         </button>
+      </div>
+
+      <!-- Page size options -->
+      <div class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div class="flex flex-wrap items-center gap-4">
+          <div class="flex items-center gap-3">
+            <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t.imagesToPdf.sizeModeLabel }}</label>
+            <BaseSelect :model-value="sizeMode"
+              @update:model-value="(val) => sizeMode = val as 'original' | 'max' | 'custom'" :options="[
+                { label: t.imagesToPdf.sizeOriginal, value: 'original' },
+                { label: t.imagesToPdf.sizeMax, value: 'max' },
+                { label: t.imagesToPdf.sizeCustom, value: 'custom' }
+              ]" />
+          </div>
+
+          <template v-if="sizeMode === 'custom'">
+            <div class="flex flex-wrap items-center gap-6">
+              <div class="flex items-center gap-3">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t.imagesToPdf.sizePresetLabel
+                  }}</label>
+                <BaseSelect :model-value="preset" @update:model-value="handlePresetChange" :options="[
+                  { label: t.imagesToPdf.presetNone || 'None', value: 'none' },
+                  { label: 'A4', value: 'A4' },
+                  { label: 'A3', value: 'A3' },
+                  { label: 'Letter', value: 'Letter' }
+                ]" />
+              </div>
+
+              <div class="flex items-center gap-4 border-l border-gray-200 dark:border-gray-700 pl-4">
+                <div class="flex items-center gap-3">
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t.imagesToPdf.customWidthLabel
+                    }}</label>
+                  <div class="relative">
+                    <input type="number" v-model.number="customWidthPx" min="1" step="1"
+                      class="w-24 pl-3 pr-6 py-2.5 rounded-lg border-0 ring-1 ring-inset ring-gray-300 dark:ring-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm transition-shadow dark:[color-scheme:dark]" />
+                    <span
+                      class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">px</span>
+                  </div>
+                </div>
+                <div class="flex items-center gap-3">
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t.imagesToPdf.customHeightLabel
+                    }}</label>
+                  <div class="relative">
+                    <input type="number" v-model.number="customHeightPx" min="1" step="1"
+                      class="w-24 pl-3 pr-6 py-2.5 rounded-lg border-0 ring-1 ring-inset ring-gray-300 dark:ring-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm transition-shadow dark:[color-scheme:dark]" />
+                    <span
+                      class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">px</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
       </div>
 
       <VueDraggable v-model="images" :animation="150" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4"
