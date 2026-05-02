@@ -22,7 +22,7 @@ const currentFile = ref<File | null>(null);
 // Removed persistent currentBuffer to avoid detached buffer issues. We read from File blob on demand.
 const pages = ref<PdfPage[]>([]);
 const isProcessing = ref(false);
-const useSafeMode = ref(false); // New: Safe Mode Toggle
+const useCompatibilityMode = ref(false);
 const lastSelectedIndex = ref<number | null>(null);
 
 const handleFileSelected = async (files: File[]) => {
@@ -128,8 +128,8 @@ const handleSplit = async () => {
     // This ensures we own the buffer and it's not detached from previous ops.
     const buffer = await currentFile.value.arrayBuffer();
 
-    if (useSafeMode.value) {
-      // SAFE MODE: Render pages to images -> PDF
+    if (useCompatibilityMode.value) {
+      // Compatibility mode: Render pages to images -> PDF.
       // We load the document ONCE using a copy of the buffer (implicitly safe as getDocument usually clones/transfers)
       const pdfDoc = await getDocumentProxy(buffer);
       
@@ -160,7 +160,7 @@ const handleSplit = async () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${currentFile.value?.name.replace('.pdf', '')}_extracted${useSafeMode.value ? '_safe' : ''}.pdf`;
+    link.download = `${currentFile.value?.name.replace('.pdf', '')}_extracted${useCompatibilityMode.value ? '_compat' : ''}.pdf`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -168,11 +168,11 @@ const handleSplit = async () => {
 
   } catch (error) {
     console.error('Split failed', error);
-    if (!useSafeMode.value) {
+    if (!useCompatibilityMode.value) {
         alert(t.value.split.standardModeFailed);
-        useSafeMode.value = true;
+        useCompatibilityMode.value = true;
     } else {
-        alert(t.value.split.safeModeAlsoFailed.replace('{{error}}', (error as any).message));
+        alert(t.value.split.compatibilityModeAlsoFailed.replace('{{error}}', (error as any).message));
     }
   } finally {
     isProcessing.value = false;
@@ -229,9 +229,9 @@ const reset = () => {
         </div>
         
         <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer select-none bg-yellow-50 dark:bg-yellow-900/20 px-3 py-1.5 rounded border border-yellow-200 dark:border-yellow-700/50">
-            <input type="checkbox" v-model="useSafeMode" class="rounded text-blue-600 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600" />
-            <span class="font-medium">{{ t.split.safeMode }}</span>
-            <span class="text-xs opacity-80 hidden sm:inline">{{ t.split.safeModeHint }}</span>
+            <input type="checkbox" v-model="useCompatibilityMode" class="rounded text-blue-600 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600" />
+            <span class="font-medium">{{ t.split.compatibilityMode }}</span>
+            <span class="text-xs opacity-80 hidden sm:inline">{{ t.split.compatibilityModeHint }}</span>
         </label>
       </div>
 

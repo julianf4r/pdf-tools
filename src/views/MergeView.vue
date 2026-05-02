@@ -25,7 +25,7 @@ const { getDocumentProxy, renderPageFromProxyToBuffer } = usePdfRenderer();
 
 const files = ref<PdfFile[]>([]);
 const isProcessing = ref(false);
-const useSafeMode = ref(false);
+const useCompatibilityMode = ref(false);
 const sizeMode = ref<PageSizeMode>('original');
 const fitMode = ref<PageFitMode>('fit');
 const customWidthPx = ref<number>(794);
@@ -114,8 +114,8 @@ const handleMerge = async () => {
   try {
     let resultPdf: Uint8Array;
 
-    if (useSafeMode.value) {
-      // Safe Mode: Render all pages to images -> PDF
+    if (useCompatibilityMode.value) {
+      // Compatibility mode: Render all pages to images -> PDF.
       const allImageBuffers: ArrayBuffer[] = [];
       const imageTypes: string[] = [];
 
@@ -151,7 +151,7 @@ const handleMerge = async () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `merged_${new Date().toISOString().slice(0,10)}${useSafeMode.value ? '_safe' : ''}.pdf`;
+    link.download = `merged_${new Date().toISOString().slice(0,10)}${useCompatibilityMode.value ? '_compat' : ''}.pdf`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -159,11 +159,11 @@ const handleMerge = async () => {
 
   } catch (error) {
     console.error('Merge failed', error);
-    if (!useSafeMode.value) {
+    if (!useCompatibilityMode.value) {
         alert(t.value.merge.standardModeFailed);
-        useSafeMode.value = true;
+        useCompatibilityMode.value = true;
     } else {
-        alert(t.value.merge.safeModeAlsoFailed.replace('{{error}}', (error as any).message));
+        alert(t.value.merge.compatibilityModeAlsoFailed.replace('{{error}}', (error as any).message));
     }
   } finally {
     isProcessing.value = false;
@@ -193,9 +193,9 @@ const handleMerge = async () => {
         
         <div class="flex items-center gap-4">
             <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer select-none bg-yellow-50 dark:bg-yellow-900/20 px-3 py-1.5 rounded border border-yellow-200 dark:border-yellow-700/50">
-                <input type="checkbox" v-model="useSafeMode" class="rounded text-blue-600 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600" />
-                <span class="font-medium">{{ t.merge.safeMode }}</span>
-                <span class="text-xs opacity-80 hidden sm:inline">{{ t.merge.safeModeHint }}</span>
+                <input type="checkbox" v-model="useCompatibilityMode" class="rounded text-blue-600 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600" />
+                <span class="font-medium">{{ t.merge.compatibilityMode }}</span>
+                <span class="text-xs opacity-80 hidden sm:inline">{{ t.merge.compatibilityModeHint }}</span>
             </label>
 
             <button 
