@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onUnmounted, computed } from 'vue';
+import { ref, computed } from 'vue';
 import { FileText, Check, Download, RotateCw } from 'lucide-vue-next';
 import FileUploader from '@/components/FileUploader.vue';
 import { usePdfRenderer } from '@/composables/usePdfRenderer';
@@ -134,18 +134,20 @@ const handleSplit = async () => {
       const pdfDoc = await getDocumentProxy(buffer);
       
       const imageBuffers: ArrayBuffer[] = [];
+      const imageTypes: string[] = [];
       
       for (const pageIndex of selectedIndices) {
         // Render using the existing proxy. No need to pass buffer again.
         const imgBuffer = await renderPageFromProxyToBuffer(pdfDoc, pageIndex, 2.0);
         imageBuffers.push(imgBuffer);
+        imageTypes.push('image/png');
       }
       
       // Note: We don't need to destroy pdfDoc explicitly as GC handles it, 
       // but pdfDoc.destroy() is good practice if available (pdf.js v2+ usually has it).
       if (pdfDoc.destroy) pdfDoc.destroy();
 
-      resultPdf = await imagesToPdf(imageBuffers, { mode: 'original' });
+      resultPdf = await imagesToPdf(imageBuffers, { mode: 'original', imageTypes });
 
     } else {
       // STANDARD MODE: Binary copy

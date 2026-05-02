@@ -1,7 +1,14 @@
-import { PDFDocument } from 'pdf-lib';
-import type { WorkerMessage, WorkerResponse, MergePayload, SplitPayload, ImagesToPdfPayload } from '../types/pdf';
+import { PDFDocument, type PDFImage, type PDFPage } from 'pdf-lib';
+import type { WorkerMessage, WorkerResponse, ImagesToPdfPayload } from '../types/pdf';
 
-self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
+interface PdfWorkerScope {
+  onmessage: ((event: MessageEvent<WorkerMessage>) => void) | null;
+  postMessage: (message: WorkerResponse, transfer?: Transferable[]) => void;
+}
+
+const workerScope = self as unknown as PdfWorkerScope;
+
+workerScope.onmessage = async (e: MessageEvent<WorkerMessage>) => {
   const { id, action, payload } = e.data;
 
   try {
@@ -9,14 +16,13 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
 
     switch (action) {
       case 'MERGE_PDFS':
-        resultBytes = await mergePdfs((payload as MergePayload).pdfBuffers);
+        resultBytes = await mergePdfs(payload.pdfBuffers);
         break;
       case 'SPLIT_PDF':
-        resultBytes = await splitPdf((payload as SplitPayload).pdfBuffer, (payload as SplitPayload).pageIndices);
+        resultBytes = await splitPdf(payload.pdfBuffer, payload.pageIndices);
         break;
-        case 'IMAGES_TO_PDF':
-          // payload may include sizing options
-          resultBytes = await imagesToPdf((payload as ImagesToPdfPayload).imageBuffers, payload as ImagesToPdfPayload);
+      case 'IMAGES_TO_PDF':
+        resultBytes = await imagesToPdf(payload.imageBuffers, payload);
         break;
       default:
         throw new Error(`Unknown action: ${action}`);
@@ -28,16 +34,15 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
       data: resultBytes
     };
 
-    // Cast self to any to avoid TS lib issues with Worker types
-    (self as any).postMessage(response, [resultBytes.buffer]);
+    workerScope.postMessage(response, [resultBytes.buffer]);
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     const response: WorkerResponse = {
       id,
       success: false,
-      error: error.message || 'Unknown error in PDF worker'
+      error: error instanceof Error ? error.message : 'Unknown error in PDF worker'
     };
-    self.postMessage(response);
+    workerScope.postMessage(response);
   }
 };
 
@@ -45,28 +50,9 @@ async function mergePdfs(pdfBuffers: ArrayBuffer[]): Promise<Uint8Array> {
   const mergedPdf = await PDFDocument.create();
   
   for (const buffer of pdfBuffers) {
-    // Convert to Uint8Array for better compatibility
     const uint8Buffer = new Uint8Array(buffer);
-    
-    // Load with error tolerance
-    let pdf;
-    try {
-       pdf = await PDFDocument.load(uint8Buffer, { ignoreEncryption: true });
-    } catch (e) {
-       // If load fails, sometimes it's a catastrophic failure we can't fix easily without more advanced tools.
-       // But often the warning is just a warning.
-       throw e; 
-    }
-
-    // "Scrub" the PDF to fix XRef tables and invalid objects if we detect potential issues.
-    // We do this by saving it once to normalize the structure.
-    // This is expensive but fixes many "blank page" issues on malformed PDFs.
-    // To optimize, we could try-catch the copyPages or check for warnings, but pdf-lib doesn't expose warnings easily.
-    // Let's do it blindly for robustness given the user report.
-    const scrubbedBytes = await pdf.save();
-    const scrubbedPdf = await PDFDocument.load(scrubbedBytes, { ignoreEncryption: true });
-
-    const copiedPages = await mergedPdf.copyPages(scrubbedPdf, scrubbedPdf.getPageIndices());
+    const pdf = await PDFDocument.load(uint8Buffer, { ignoreEncryption: true });
+    const copiedPages = await copyPagesWithScrubFallback(mergedPdf, pdf, pdf.getPageIndices());
     copiedPages.forEach((page) => mergedPdf.addPage(page));
   }
 
@@ -75,22 +61,23 @@ async function mergePdfs(pdfBuffers: ArrayBuffer[]): Promise<Uint8Array> {
 
 async function splitPdf(pdfBuffer: ArrayBuffer, pageIndices: number[]): Promise<Uint8Array> {
   const uint8Buffer = new Uint8Array(pdfBuffer);
-  
-  // 1. Initial Load
   const srcPdf = await PDFDocument.load(uint8Buffer, { ignoreEncryption: true });
-  
-  // 2. "Scrub" / Normalize the PDF. 
-  // This rebuilds the XRef table and fixes broken object references which cause blank pages.
-  const scrubbedBytes = await srcPdf.save();
-  const scrubbedSrcPdf = await PDFDocument.load(scrubbedBytes, { ignoreEncryption: true });
-
-  // 3. Create new doc and copy from the CLEAN source
   const newPdf = await PDFDocument.create();
   
-  const copiedPages = await newPdf.copyPages(scrubbedSrcPdf, pageIndices);
+  const copiedPages = await copyPagesWithScrubFallback(newPdf, srcPdf, pageIndices);
   copiedPages.forEach((page) => newPdf.addPage(page));
 
   return await newPdf.save();
+}
+
+async function copyPagesWithScrubFallback(targetPdf: PDFDocument, sourcePdf: PDFDocument, pageIndices: number[]): Promise<PDFPage[]> {
+  try {
+    return await targetPdf.copyPages(sourcePdf, pageIndices);
+  } catch {
+    const scrubbedBytes = await sourcePdf.save();
+    const scrubbedPdf = await PDFDocument.load(scrubbedBytes, { ignoreEncryption: true });
+    return await targetPdf.copyPages(scrubbedPdf, pageIndices);
+  }
 }
 
 async function imagesToPdf(imageBuffers: ArrayBuffer[], options?: ImagesToPdfPayload): Promise<Uint8Array> {
@@ -99,17 +86,18 @@ async function imagesToPdf(imageBuffers: ArrayBuffer[], options?: ImagesToPdfPay
   // Helper: convert pixels to PDF points. Assume 96 DPI for pixel units: 1px = 72/96 pt
   const pxToPt = (px: number) => (px * 72) / 96;
 
-  // First, embed all images and collect their intrinsic sizes
-  const embedded: { image: any; width: number; height: number }[] = [];
-  for (const buffer of imageBuffers) {
-    const header = new Uint8Array(buffer.slice(0, 4));
-    const isPng = header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47;
-    let image;
-    if (isPng) {
-      image = await pdf.embedPng(buffer);
-    } else {
-      image = await pdf.embedJpg(buffer);
+  const embedded: { image: PDFImage; width: number; height: number }[] = [];
+  for (let index = 0; index < imageBuffers.length; index++) {
+    const buffer = imageBuffers[index];
+    if (!buffer) {
+      throw new Error(`Missing image data at index ${index}`);
     }
+
+    const type = options?.imageTypes?.[index];
+    const image = type === 'image/png'
+      ? await pdf.embedPng(buffer)
+      : await pdf.embedJpg(buffer);
+
     const size = image.scale(1);
     embedded.push({ image, width: size.width, height: size.height });
   }
@@ -124,6 +112,9 @@ async function imagesToPdf(imageBuffers: ArrayBuffer[], options?: ImagesToPdfPay
     targetWidth = Math.max(...embedded.map(e => e.width));
     targetHeight = Math.max(...embedded.map(e => e.height));
   } else if (mode === 'custom' && typeof options?.customWidthPx === 'number' && typeof options?.customHeightPx === 'number') {
+    if (!Number.isFinite(options.customWidthPx) || !Number.isFinite(options.customHeightPx) || options.customWidthPx <= 0 || options.customHeightPx <= 0) {
+      throw new Error('Custom page size must be greater than zero');
+    }
     // custom width/height are provided in pixels — convert to points
     targetWidth = pxToPt(options.customWidthPx);
     targetHeight = pxToPt(options.customHeightPx);

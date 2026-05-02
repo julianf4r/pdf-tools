@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onUnmounted } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import { Image as ImageIcon, X, Download } from 'lucide-vue-next';
 import FileUploader from '@/components/FileUploader.vue';
@@ -13,6 +13,11 @@ interface ImageFile {
   file: File;
   url: string;
   name: string;
+}
+
+interface PreparedImage {
+  buffer: ArrayBuffer;
+  type: 'image/jpeg' | 'image/png';
 }
 
 const store = useAppStore();
@@ -59,7 +64,7 @@ const handlePresetChange = (val: string | number) => {
 
 const handleFilesSelected = (selectedFiles: File[]) => {
   for (const file of selectedFiles) {
-    if (file.type.startsWith('image/')) {
+    if (canDecodeImage(file)) {
       const url = URL.createObjectURL(file);
       images.value.push({
         id: crypto.randomUUID(),
@@ -73,6 +78,10 @@ const handleFilesSelected = (selectedFiles: File[]) => {
   }
 };
 
+const canDecodeImage = (file: File) => {
+  return file.type.startsWith('image/') && file.type !== 'image/heic' && file.type !== 'image/heif';
+};
+
 const removeImage = (id: string) => {
   const img = images.value.find(i => i.id === id);
   if (img) {
@@ -81,8 +90,77 @@ const removeImage = (id: string) => {
   }
 };
 
+const clearImages = () => {
+  images.value.forEach((img) => URL.revokeObjectURL(img.url));
+  images.value = [];
+};
+
+const loadImageElement = (file: File): Promise<HTMLImageElement> => {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error(`Could not decode image: ${file.name}`));
+    };
+
+    image.src = url;
+  });
+};
+
+const convertImageToPng = async (file: File): Promise<PreparedImage> => {
+  const image = await loadImageElement(file);
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+
+  const context = canvas.getContext('2d');
+  if (!context || canvas.width <= 0 || canvas.height <= 0) {
+    throw new Error(`Invalid image dimensions: ${file.name}`);
+  }
+
+  context.drawImage(image, 0, 0);
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((result) => {
+      if (result) {
+        resolve(result);
+      } else {
+        reject(new Error(`Could not convert image: ${file.name}`));
+      }
+    }, 'image/png');
+  });
+
+  return {
+    buffer: await blob.arrayBuffer(),
+    type: 'image/png',
+  };
+};
+
+const prepareImageForPdf = async (file: File): Promise<PreparedImage> => {
+  if (file.type === 'image/png') {
+    return { buffer: await file.arrayBuffer(), type: 'image/png' };
+  }
+
+  if (file.type === 'image/jpeg') {
+    return { buffer: await file.arrayBuffer(), type: 'image/jpeg' };
+  }
+
+  return await convertImageToPng(file);
+};
+
 const handleConvert = async () => {
   if (images.value.length === 0) return;
+
+  if (sizeMode.value === 'custom' && (!Number.isFinite(customWidthPx.value) || !Number.isFinite(customHeightPx.value) || customWidthPx.value <= 0 || customHeightPx.value <= 0)) {
+    alert(t.value.imagesToPdf.invalidSizeError);
+    return;
+  }
 
   isProcessing.value = true;
   store.setLoading(true);
@@ -90,16 +168,20 @@ const handleConvert = async () => {
   try {
     // Convert to buffers
     const buffers: ArrayBuffer[] = [];
+    const imageTypes: string[] = [];
     for (const img of images.value) {
-      const buffer = await img.file.arrayBuffer();
-      buffers.push(buffer);
+      const prepared = await prepareImageForPdf(img.file);
+      buffers.push(prepared.buffer);
+      imageTypes.push(prepared.type);
     }
 
     // Build options
-    const options: any = { mode: sizeMode.value };
+    const options = { mode: sizeMode.value, imageTypes } as const;
     if (sizeMode.value === 'custom') {
-      options.customWidthPx = customWidthPx.value;
-      options.customHeightPx = customHeightPx.value;
+      Object.assign(options, {
+        customWidthPx: customWidthPx.value,
+        customHeightPx: customHeightPx.value,
+      });
     }
 
     // Call worker
@@ -124,6 +206,10 @@ const handleConvert = async () => {
     store.setLoading(false);
   }
 };
+
+onUnmounted(() => {
+  clearImages();
+});
 </script>
 
 <template>
@@ -167,7 +253,7 @@ const handleConvert = async () => {
                 <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t.imagesToPdf.customWidthLabel
                   }}</label>
                 <div class="relative">
-                  <input type="number" v-model.number="customWidthPx" min="0" step="1"
+                  <input type="number" v-model.number="customWidthPx" min="1" step="1"
                     class="w-24 pl-3 pr-6 py-2.5 rounded-lg border-0 ring-1 ring-inset ring-gray-300 dark:ring-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm transition-shadow dark:[color-scheme:dark]" />
                   <span
                     class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">px</span>
@@ -177,7 +263,7 @@ const handleConvert = async () => {
                 <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t.imagesToPdf.customHeightLabel
                   }}</label>
                 <div class="relative">
-                  <input type="number" v-model.number="customHeightPx" min="0" step="1"
+                  <input type="number" v-model.number="customHeightPx" min="1" step="1"
                     class="w-24 pl-3 pr-6 py-2.5 rounded-lg border-0 ring-1 ring-inset ring-gray-300 dark:ring-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm transition-shadow dark:[color-scheme:dark]" />
                   <span
                     class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">px</span>
@@ -194,7 +280,7 @@ const handleConvert = async () => {
         <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">{{ t.imagesToPdf.images }} ({{ images.length
           }})
         </h3>
-        <button @click="images = []" class="text-sm text-red-500 hover:text-red-600 dark:text-red-400">
+        <button @click="clearImages" class="text-sm text-red-500 hover:text-red-600 dark:text-red-400">
           {{ t.common.clearAll }}
         </button>
       </div>

@@ -1,11 +1,5 @@
 export type WorkerAction = 'MERGE_PDFS' | 'SPLIT_PDF' | 'IMAGES_TO_PDF';
 
-export interface WorkerMessage {
-  id: string;
-  action: WorkerAction;
-  payload: any;
-}
-
 export interface WorkerResponse {
   id: string;
   success: boolean;
@@ -24,6 +18,7 @@ export interface SplitPayload {
 
 export interface ImagesToPdfPayload {
   imageBuffers: ArrayBuffer[];
+  imageTypes?: string[];
   // page sizing mode: 'original' = each page uses the original image size,
   // 'max' = use the maximum width/height among all images for every page,
   // 'custom' = use provided customWidthPx/customHeightPx for all pages (in pixels)
@@ -32,3 +27,20 @@ export interface ImagesToPdfPayload {
   customWidthPx?: number;
   customHeightPx?: number;
 }
+
+export type WorkerMessage =
+  | {
+      id: string;
+      action: 'MERGE_PDFS';
+      payload: MergePayload;
+    }
+  | {
+      id: string;
+      action: 'SPLIT_PDF';
+      payload: SplitPayload;
+    }
+  | {
+      id: string;
+      action: 'IMAGES_TO_PDF';
+      payload: ImagesToPdfPayload;
+    };

@@ -51,7 +51,7 @@
     "title": "图片转 PDF",
     "description": "将多张图片转换和组合为一个 PDF。",
     "uploadLabel": "在此放置图片",
-    "uploadDescription": "支持 JPG、PNG、WEBP 格式",
+    "uploadDescription": "支持 JPG、PNG、WEBP、GIF、BMP、SVG 及其他浏览器可读取的图片",
     "sizeModeLabel": "页面尺寸",
     "sizeOriginal": "原始尺寸",
     "sizeMax": "最大尺寸",
@@ -64,6 +64,7 @@
     "convertButton": "转换为 PDF",
     "processing": "转换中...",
     "conversionError": "无法将图片转换为 PDF。",
+    "invalidSizeError": "自定义宽度和高度必须大于 0。",
     "skipError": "跳过 {{filename}}：不是图片"
   },
   "fileUploader": {

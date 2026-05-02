@@ -1,22 +1,8 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure worker
-// In a real production build, we might want to copy the worker file to public or import it differently.
-// For Vite, using the CDN or local import via ?worker usually works.
-// However, importing 'pdfjs-dist/build/pdf.worker.mjs?worker' can sometimes be tricky with TypeScript.
-// Let's try setting the workerSrc to the CDN for simplicity and reliability in this context, 
-// or use a standard dynamic import.
-// For a purely offline client-side app, we should bundle it. 
+const PDFJS_BASE = `${import.meta.env.BASE_URL}pdfjs`;
 
-// Let's try to point to the node_modules file served by Vite during dev, 
-// or use the standard worker import pattern.
-// Using CDN for worker and assets to ensure Wasm/CMaps load correctly without complex Vite asset copying
-const PDFJS_VERSION = '5.4.449';
-const CDN_BASE = `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}`;
-
-const workerUrl = `${CDN_BASE}/build/pdf.worker.min.mjs`;
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `${PDFJS_BASE}/build/pdf.worker.min.mjs`;
 
 export function usePdfRenderer() {
   
@@ -28,9 +14,9 @@ export function usePdfRenderer() {
     // Load document
     const loadingTask = pdfjsLib.getDocument({ 
       data: pdfData,
-      cMapUrl: `${CDN_BASE}/cmaps/`,
+      cMapUrl: `${PDFJS_BASE}/cmaps/`,
       cMapPacked: true,
-      standardFontDataUrl: `${CDN_BASE}/standard_fonts/`,
+      standardFontDataUrl: `${PDFJS_BASE}/standard_fonts/`,
       verbosity: pdfjsLib.VerbosityLevel.ERRORS
     });
     const pdf = await loadingTask.promise;
@@ -71,9 +57,9 @@ export function usePdfRenderer() {
   const getDocumentProxy = async (pdfData: ArrayBuffer) => {
     return await pdfjsLib.getDocument({ 
       data: pdfData,
-      cMapUrl: `${CDN_BASE}/cmaps/`,
+      cMapUrl: `${PDFJS_BASE}/cmaps/`,
       cMapPacked: true,
-      standardFontDataUrl: `${CDN_BASE}/standard_fonts/`,
+      standardFontDataUrl: `${PDFJS_BASE}/standard_fonts/`,
       verbosity: pdfjsLib.VerbosityLevel.ERRORS
     }).promise;
   };

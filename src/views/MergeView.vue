@@ -64,6 +64,7 @@ const handleMerge = async () => {
     if (useSafeMode.value) {
       // Safe Mode: Render all pages to images -> PDF
       const allImageBuffers: ArrayBuffer[] = [];
+      const imageTypes: string[] = [];
 
       for (const pdf of files.value) {
         const buffer = await pdf.file.arrayBuffer();
@@ -74,12 +75,13 @@ const handleMerge = async () => {
           // Render at good quality (scale 2.0)
           const imgBuffer = await renderPageFromProxyToBuffer(pdfDoc, i, 2.0);
           allImageBuffers.push(imgBuffer);
+          imageTypes.push('image/png');
         }
 
         if (pdfDoc.destroy) pdfDoc.destroy();
       }
 
-      resultPdf = await imagesToPdf(allImageBuffers, { mode: 'original' });
+      resultPdf = await imagesToPdf(allImageBuffers, { mode: 'original', imageTypes });
 
     } else {
       // Standard Mode

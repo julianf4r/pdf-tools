@@ -51,7 +51,7 @@
     "title": "Images to PDF",
     "description": "Convert and combine images into a single PDF.",
     "uploadLabel": "Drop Images here",
-    "uploadDescription": "Supports JPG, PNG, WEBP",
+    "uploadDescription": "Supports JPG, PNG, WEBP, GIF, BMP, SVG and other browser-readable images",
     "sizeModeLabel": "Page Size",
     "sizeOriginal": "Original",
     "sizeMax": "Max Size",
@@ -64,6 +64,7 @@
     "convertButton": "Convert to PDF",
     "processing": "Converting...",
     "conversionError": "Failed to convert images to PDF.",
+    "invalidSizeError": "Custom width and height must be greater than zero.",
     "skipError": "Skipped {{filename}}: Not an image"
   },
   "fileUploader": {
