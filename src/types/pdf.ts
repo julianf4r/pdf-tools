@@ -9,6 +9,7 @@ export interface WorkerResponse {
 
 export interface MergePayload {
   pdfBuffers: ArrayBuffer[];
+  pageSize?: PageSizeOptions;
 }
 
 export interface SplitPayload {
@@ -22,8 +23,19 @@ export interface ImagesToPdfPayload {
   // page sizing mode: 'original' = each page uses the original image size,
   // 'max' = use the maximum width/height among all images for every page,
   // 'custom' = use provided customWidthPx/customHeightPx for all pages (in pixels)
-  mode?: 'original' | 'max' | 'custom';
+  mode?: PageSizeMode;
   // custom dimensions in pixels
+  customWidthPx?: number;
+  customHeightPx?: number;
+}
+
+export type PageSizeMode = 'original' | 'max' | 'custom';
+
+export type PageFitMode = 'fit' | 'center';
+
+export interface PageSizeOptions {
+  mode?: PageSizeMode;
+  fitMode?: PageFitMode;
   customWidthPx?: number;
   customHeightPx?: number;
 }

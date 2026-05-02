@@ -3,10 +3,12 @@ import { ref, computed } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import { FileText, X, GripVertical, Download } from 'lucide-vue-next';
 import FileUploader from '@/components/FileUploader.vue';
+import BaseSelect from '@/components/BaseSelect.vue';
 import { usePdfWorker } from '@/composables/usePdfWorker';
 import { usePdfRenderer } from '@/composables/usePdfRenderer';
 import { useAppStore } from '@/stores/app';
 import { messages } from '@/i18n';
+import type { PageFitMode, PageSizeMode, PageSizeOptions } from '@/types/pdf';
 
 interface PdfFile {
   id: string;
@@ -24,6 +26,52 @@ const { getDocumentProxy, renderPageFromProxyToBuffer } = usePdfRenderer();
 const files = ref<PdfFile[]>([]);
 const isProcessing = ref(false);
 const useSafeMode = ref(false);
+const sizeMode = ref<PageSizeMode>('original');
+const fitMode = ref<PageFitMode>('fit');
+const customWidthPx = ref<number>(794);
+const customHeightPx = ref<number>(1123);
+const preset = ref<'none' | 'A4' | 'A3' | 'Letter'>('none');
+
+const mmToPx = (mm: number) => Math.round((mm * 96) / 25.4);
+
+const applyPreset = (value: string) => {
+  if (value === 'A4') {
+    customWidthPx.value = mmToPx(210);
+    customHeightPx.value = mmToPx(297);
+    sizeMode.value = 'custom';
+  } else if (value === 'A3') {
+    customWidthPx.value = mmToPx(297);
+    customHeightPx.value = mmToPx(420);
+    sizeMode.value = 'custom';
+  } else if (value === 'Letter') {
+    customWidthPx.value = Math.round(8.5 * 96);
+    customHeightPx.value = Math.round(11 * 96);
+    sizeMode.value = 'custom';
+  }
+};
+
+const handlePresetChange = (value: string | number) => {
+  preset.value = value as 'none' | 'A4' | 'A3' | 'Letter';
+  applyPreset(String(value));
+};
+
+const isCustomSizeValid = () => {
+  return Number.isFinite(customWidthPx.value) && Number.isFinite(customHeightPx.value) && customWidthPx.value > 0 && customHeightPx.value > 0;
+};
+
+const getPageSizeOptions = (): PageSizeOptions => {
+  const options: PageSizeOptions = {
+    mode: sizeMode.value,
+    fitMode: fitMode.value,
+  };
+
+  if (sizeMode.value === 'custom') {
+    options.customWidthPx = customWidthPx.value;
+    options.customHeightPx = customHeightPx.value;
+  }
+
+  return options;
+};
 
 const handleFilesSelected = async (selectedFiles: File[]) => {
   for (const file of selectedFiles) {
@@ -54,6 +102,11 @@ const formatSize = (bytes: number) => {
 
 const handleMerge = async () => {
   if (files.value.length < 2) return;
+
+  if (sizeMode.value === 'custom' && !isCustomSizeValid()) {
+    alert(t.value.merge.invalidSizeError);
+    return;
+  }
   
   isProcessing.value = true;
   store.setLoading(true);
@@ -81,7 +134,7 @@ const handleMerge = async () => {
         if (pdfDoc.destroy) pdfDoc.destroy();
       }
 
-      resultPdf = await imagesToPdf(allImageBuffers, { mode: 'original', imageTypes });
+      resultPdf = await imagesToPdf(allImageBuffers, { ...getPageSizeOptions(), imageTypes });
 
     } else {
       // Standard Mode
@@ -90,7 +143,7 @@ const handleMerge = async () => {
         const buffer = await pdf.file.arrayBuffer();
         buffers.push(buffer);
       }
-      resultPdf = await mergePdfs(buffers);
+      resultPdf = await mergePdfs(buffers, getPageSizeOptions());
     }
 
     // Download
@@ -151,6 +204,85 @@ const handleMerge = async () => {
             >
             {{ t.common.clearAll }}
             </button>
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div class="flex flex-wrap items-center gap-4">
+          <div class="flex items-center gap-3">
+            <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t.merge.pageSizeLabel }}</label>
+            <BaseSelect
+              :model-value="sizeMode"
+              @update:model-value="(value) => sizeMode = value as PageSizeMode"
+              :options="[
+                { label: t.merge.sizeOriginal, value: 'original' },
+                { label: t.merge.sizeMax, value: 'max' },
+                { label: t.merge.sizeCustom, value: 'custom' }
+              ]"
+            />
+          </div>
+
+          <template v-if="sizeMode !== 'original'">
+            <div class="flex items-center gap-3">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t.merge.fitModeLabel }}</label>
+              <BaseSelect
+                :model-value="fitMode"
+                @update:model-value="(value) => fitMode = value as PageFitMode"
+                :options="[
+                  { label: t.merge.fitModeFit, value: 'fit' },
+                  { label: t.merge.fitModeCenter, value: 'center' }
+                ]"
+              />
+            </div>
+          </template>
+
+          <template v-if="sizeMode === 'custom'">
+            <div class="flex flex-wrap items-center gap-6">
+              <div class="flex items-center gap-3">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t.merge.sizePresetLabel }}</label>
+                <BaseSelect
+                  :model-value="preset"
+                  @update:model-value="handlePresetChange"
+                  :options="[
+                    { label: t.merge.presetNone, value: 'none' },
+                    { label: 'A4', value: 'A4' },
+                    { label: 'A3', value: 'A3' },
+                    { label: 'Letter', value: 'Letter' }
+                  ]"
+                />
+              </div>
+
+              <div class="flex items-center gap-4 border-l border-gray-200 dark:border-gray-700 pl-4">
+                <div class="flex items-center gap-3">
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t.merge.customWidthLabel }}</label>
+                  <div class="relative">
+                    <input
+                      type="number"
+                      v-model.number="customWidthPx"
+                      min="1"
+                      step="1"
+                      class="w-24 pl-3 pr-6 py-2.5 rounded-lg border-0 ring-1 ring-inset ring-gray-300 dark:ring-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-shadow dark:[color-scheme:dark]"
+                    />
+                    <span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">px</span>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t.merge.customHeightLabel }}</label>
+                  <div class="relative">
+                    <input
+                      type="number"
+                      v-model.number="customHeightPx"
+                      min="1"
+                      step="1"
+                      class="w-24 pl-3 pr-6 py-2.5 rounded-lg border-0 ring-1 ring-inset ring-gray-300 dark:ring-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-shadow dark:[color-scheme:dark]"
+                    />
+                    <span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">px</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
         </div>
       </div>
 

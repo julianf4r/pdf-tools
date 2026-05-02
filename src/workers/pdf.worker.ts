@@ -1,5 +1,5 @@
 import { PDFDocument, type PDFImage, type PDFPage } from 'pdf-lib';
-import type { WorkerMessage, WorkerResponse, ImagesToPdfPayload } from '../types/pdf';
+import type { PageFitMode, PageSizeOptions, WorkerMessage, WorkerResponse, ImagesToPdfPayload } from '../types/pdf';
 
 interface PdfWorkerScope {
   onmessage: ((event: MessageEvent<WorkerMessage>) => void) | null;
@@ -16,7 +16,7 @@ workerScope.onmessage = async (e: MessageEvent<WorkerMessage>) => {
 
     switch (action) {
       case 'MERGE_PDFS':
-        resultBytes = await mergePdfs(payload.pdfBuffers);
+        resultBytes = await mergePdfs(payload.pdfBuffers, payload.pageSize);
         break;
       case 'SPLIT_PDF':
         resultBytes = await splitPdf(payload.pdfBuffer, payload.pageIndices);
@@ -46,14 +46,48 @@ workerScope.onmessage = async (e: MessageEvent<WorkerMessage>) => {
   }
 };
 
-async function mergePdfs(pdfBuffers: ArrayBuffer[]): Promise<Uint8Array> {
+const pxToPt = (px: number) => (px * 72) / 96;
+
+async function mergePdfs(pdfBuffers: ArrayBuffer[], pageSize?: PageSizeOptions): Promise<Uint8Array> {
   const mergedPdf = await PDFDocument.create();
+
+  if (pageSize?.mode && pageSize.mode !== 'original') {
+    return await mergePdfsWithPageSize(mergedPdf, pdfBuffers, pageSize);
+  }
   
   for (const buffer of pdfBuffers) {
     const uint8Buffer = new Uint8Array(buffer);
     const pdf = await PDFDocument.load(uint8Buffer, { ignoreEncryption: true });
     const copiedPages = await copyPagesWithScrubFallback(mergedPdf, pdf, pdf.getPageIndices());
     copiedPages.forEach((page) => mergedPdf.addPage(page));
+  }
+
+  return await mergedPdf.save();
+}
+
+async function mergePdfsWithPageSize(mergedPdf: PDFDocument, pdfBuffers: ArrayBuffer[], pageSize: PageSizeOptions): Promise<Uint8Array> {
+  const sourcePages: PDFPage[] = [];
+
+  for (const buffer of pdfBuffers) {
+    const pdf = await PDFDocument.load(new Uint8Array(buffer), { ignoreEncryption: true });
+    sourcePages.push(...pdf.getPages());
+  }
+
+  const targetSize = resolveTargetPageSize(sourcePages, pageSize);
+  const fitMode = pageSize.fitMode || 'fit';
+
+  for (const sourcePage of sourcePages) {
+    const embeddedPage = await mergedPdf.embedPage(sourcePage);
+    const targetPage = mergedPdf.addPage([targetSize.width, targetSize.height]);
+    const placement = getPagePlacement(
+      embeddedPage.width,
+      embeddedPage.height,
+      targetSize.width,
+      targetSize.height,
+      fitMode
+    );
+
+    targetPage.drawPage(embeddedPage, placement);
   }
 
   return await mergedPdf.save();
@@ -80,11 +114,64 @@ async function copyPagesWithScrubFallback(targetPdf: PDFDocument, sourcePdf: PDF
   }
 }
 
+function resolveTargetPageSize(pages: PDFPage[], options: PageSizeOptions): { width: number; height: number } {
+  if (options.mode === 'max') {
+    return pages.reduce(
+      (maxSize, page) => {
+        const { width, height } = page.getSize();
+        return {
+          width: Math.max(maxSize.width, width),
+          height: Math.max(maxSize.height, height),
+        };
+      },
+      { width: 0, height: 0 }
+    );
+  }
+
+  if (options.mode === 'custom' && typeof options.customWidthPx === 'number' && typeof options.customHeightPx === 'number') {
+    if (!Number.isFinite(options.customWidthPx) || !Number.isFinite(options.customHeightPx) || options.customWidthPx <= 0 || options.customHeightPx <= 0) {
+      throw new Error('Custom page size must be greater than zero');
+    }
+
+    return {
+      width: pxToPt(options.customWidthPx),
+      height: pxToPt(options.customHeightPx),
+    };
+  }
+
+  throw new Error('Invalid page size options');
+}
+
+function getPagePlacement(
+  sourceWidth: number,
+  sourceHeight: number,
+  targetWidth: number,
+  targetHeight: number,
+  fitMode: PageFitMode
+): { x: number; y: number; width: number; height: number } {
+  if (fitMode === 'center') {
+    return {
+      x: (targetWidth - sourceWidth) / 2,
+      y: (targetHeight - sourceHeight) / 2,
+      width: sourceWidth,
+      height: sourceHeight,
+    };
+  }
+
+  const scale = Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight);
+  const width = sourceWidth * scale;
+  const height = sourceHeight * scale;
+
+  return {
+    x: (targetWidth - width) / 2,
+    y: (targetHeight - height) / 2,
+    width,
+    height,
+  };
+}
+
 async function imagesToPdf(imageBuffers: ArrayBuffer[], options?: ImagesToPdfPayload): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
-
-  // Helper: convert pixels to PDF points. Assume 96 DPI for pixel units: 1px = 72/96 pt
-  const pxToPt = (px: number) => (px * 72) / 96;
 
   const embedded: { image: PDFImage; width: number; height: number }[] = [];
   for (let index = 0; index < imageBuffers.length; index++) {

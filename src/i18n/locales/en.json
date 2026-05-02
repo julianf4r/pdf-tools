@@ -45,6 +45,18 @@
     "safeModeAlsoFailed": "Failed to merge even in Safe Mode. Error: {{error}}",
     "safeMode": "Safe Mode",
     "safeModeHint": "(Fixes blank pages / errors)",
+    "pageSizeLabel": "Page Size",
+    "sizeOriginal": "Keep Original",
+    "sizeMax": "Max Size",
+    "sizeCustom": "Custom",
+    "fitModeLabel": "Content",
+    "fitModeFit": "Fit Page",
+    "fitModeCenter": "Center",
+    "sizePresetLabel": "Presets",
+    "presetNone": "None",
+    "customWidthLabel": "Width",
+    "customHeightLabel": "Height",
+    "invalidSizeError": "Custom width and height must be greater than zero.",
     "skipError": "Skipped {{filename}}: Not a PDF file"
   },
   "imagesToPdf": {

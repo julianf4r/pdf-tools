@@ -45,6 +45,18 @@
     "safeModeAlsoFailed": "即使在安全模式下也合并失败。错误：{{error}}",
     "safeMode": "安全模式",
     "safeModeHint": "（修复空白页或错误）",
+    "pageSizeLabel": "页面尺寸",
+    "sizeOriginal": "保留原始尺寸",
+    "sizeMax": "最大尺寸",
+    "sizeCustom": "自定义",
+    "fitModeLabel": "内容",
+    "fitModeFit": "适应页面",
+    "fitModeCenter": "居中",
+    "sizePresetLabel": "预设",
+    "presetNone": "无",
+    "customWidthLabel": "宽度",
+    "customHeightLabel": "高度",
+    "invalidSizeError": "自定义宽度和高度必须大于 0。",
     "skipError": "跳过 {{filename}}：不是 PDF 文件"
   },
   "imagesToPdf": {

@@ -1,5 +1,5 @@
 import { onUnmounted } from 'vue';
-import type { WorkerMessage, WorkerResponse } from '../types/pdf';
+import type { PageSizeOptions, WorkerMessage, WorkerResponse } from '../types/pdf';
 import PdfWorker from '../workers/pdf.worker.ts?worker';
 
 export function usePdfWorker() {
@@ -49,10 +49,10 @@ export function usePdfWorker() {
     });
   };
 
-  const mergePdfs = (pdfBuffers: ArrayBuffer[]) => postMessageToWorker({
+  const mergePdfs = (pdfBuffers: ArrayBuffer[], pageSize?: PageSizeOptions) => postMessageToWorker({
     id: crypto.randomUUID(),
     action: 'MERGE_PDFS',
-    payload: { pdfBuffers },
+    payload: { pdfBuffers, pageSize },
   });
   const splitPdf = (pdfBuffer: ArrayBuffer, pageIndices: number[]) => postMessageToWorker({
     id: crypto.randomUUID(),
@@ -63,10 +63,7 @@ export function usePdfWorker() {
     imageBuffers: ArrayBuffer[],
     options?: {
       imageTypes?: string[];
-      mode?: 'original' | 'max' | 'custom';
-      customWidthPx?: number;
-      customHeightPx?: number;
-    }
+    } & PageSizeOptions
   ) => postMessageToWorker({
     id: crypto.randomUUID(),
     action: 'IMAGES_TO_PDF',
